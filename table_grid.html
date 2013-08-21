@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Bootstrap table_grid</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Bootstrap -->
+    <link href="../libs/bootstrap/css/bootstrap.css" rel="stylesheet" media="screen">
+    <!-- table-grid -->
+    <link href="../css/table-grid.css" rel="stylesheet" media="screen">
+  </head>
+  <body class="container">
+    <h1>Hello, bootstrap-tablegrid!</h1>
+    <script src="../libs/jquery/jquery-1.8.2.js"></script>
+    <script src="../libs/bootstrap/js/bootstrap.js"></script>
+    <script src="../libs/bootstrap-tablegrid.js"></script>
+
+    <script type="text/javascript">
+$(document).ready(function(){
+  var tg = $("#table1").tablegrid({autoLoad: true});
+  $("#btn_add").click(function(){
+    alert("btn_add click");
+  });
+});
+
+    </script>
+<div class="span9">
+    <table id="table1" class="table table-bordered tablegrid"
+      chkallbox=true page=10 records=true data_source="server" data_url='../table_grid.php' 
+    >
+      <caption style="background: #ccc; line-height:30px">caption1</caption>
+        <tr>
+          <th bind="b1" title="caicaicai">adsf33333</th>
+          <th bind="b2">adsf</th>
+          <th bind="b3">adsf</th>
+          <th bind="b3">adsf</th>
+        </tr>
+      <tfoot>
+        <tr>
+          <td colspan="5" class="table-grid-gridbar">
+                <div class="btn-toolbar table-grid-toolbar">
+                  <div class="btn-group">
+                    <button class="btn" id="btn_add"><i class="icon-plus"></i> 添加</button>
+                    <button class="btn" id="btn_edit"><i class="icon-edit"></i> 修改</button>
+                    <button class="btn" id="btn_del"><i class="icon-minus"></i> 删除</button>
+                  </div>
+                  <div class="btn-group">
+                    <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
+                      <i class="icon-check"></i> 审核
+                      <span class="caret"></span>
+                    </a>
+                    <ul class="dropdown-menu">
+                      <li><a href="#"><i class="icon-ok"></i> 通过</a></li>
+                      <li><a href="#"><i class="icon-remove"></i> 不通过</a></li>
+                    </ul>
+                  </div>
+                </div>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  </body>
+</html>

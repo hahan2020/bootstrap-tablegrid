@@ -68,16 +68,16 @@
         , title : ""
         , hidden : false
       }
-    , setParam : function(params) {
-        console.log("setParam");
+    , setPost : function(params, value) {
         $.extend(true, this.options.data_post ,params);
         return this;
       }
-    , getParam : function(param){
-        var $t = this[0];
-        if (!$t || !$t.grid) {return;}
-        if (!pName) { return $t.p; }
-        else {return typeof($t.p[pName]) != "undefined" ? $t.p[pName] : null;}
+    , getPost : function(param){
+        if (param == undefined) {
+          return this.options.data_post;
+        } else {
+          return this.options.data_post[param];
+        }
       }
       //TODO:需添加本地js变量
     , reloadData : function() {
@@ -101,6 +101,12 @@
           });
         }
         return this;
+      }
+    , page : function(i) {
+        console.log("page:" + i);
+        this.options.data_post.page = i;
+        this.options.data_post.pageSize = this.options.page;
+        this.reloadData();
       }
     , empty : function() {
         this.jqTable.children("tbody").children("tr").each(function(){
@@ -174,7 +180,7 @@
       chkall = $("<input type=checkbox>");
       chkall.click(function() {
         var checked = $(this).attr("checked");
-        tablegrid.tbody().children("tr").each(function(i, n) {
+        tbody(tablegrid).children("tr").each(function(i, n) {
           var chkbox = $(this).children("td:first").children("input[type='checkbox']");
           if (checked == "checked") {
             chkbox.attr("checked", true);
@@ -276,21 +282,25 @@
         .addClass("table-grid-pagination")
         .addClass("pagination")
         .addClass("pagination-centered");
-      a1 = $("<a href='#'>&laquo;</a>");
-      a1.click(function(){
-        log("a1");
-      });
+      a1 = $("<a href='#' page='1'>&laquo;</a>");
       a2 = $("<a href='#'>&lt;</a>");
       a3 = $("<a href='#'>1/1</a>");
       a4 = $("<a href='#'>&gt;</a>");
       a5 = $("<a href='#'>&raquo;</a>");
-      l1 = $("<li></li>").append(a1);
-      l2 = $("<li></li>").append(a2);
+      l1 = $("<li class='disabled'></li>").append(a1);
+      l2 = $("<li class='disabled'></li>").append(a2);
       l3 = $("<li class='disabled'></li>").append(a3);
-      l4 = $("<li></li>").append(a4);
-      l5 = $("<li></li>").append(a5);
-      ul = $("<ul></ul>").append(l1).append(l2).append(l3).append(l4).append(l5);
+      l4 = $("<li class='disabled'></li>").append(a4);
+      l5 = $("<li class='disabled'></li>").append(a5);
+      ul = $("<ul class='disabled'></ul>").append(l1).append(l2).append(l3).append(l4).append(l5);
       jqPagebar.append(ul);
+      $("li>a", ul).each(function(){
+        $(this).click(function(){
+          $("li", ul).addClass("disabled");
+          page = $(this).attr("page");
+          tablegrid.page(page);
+        });
+      });
       jqPagebar.insertAfter(toolbar(tablegrid));
     }
     return jqPagebar;
@@ -314,7 +324,6 @@
   function renderRemoteBody(tablegrid, response) {
     log("renderRemoteBody");
     jqTable = tablegrid.jqTable;
-        console.log(jqTable.html());
     jqTbody = tbody(tablegrid);
     jqTbody.children("tr").each(function(){
       $(this).remove();
@@ -322,7 +331,6 @@
 
     data_reader = tablegrid.options.data_reader;
     data = response[data_reader.root];
-    console.log(data.length);
     for(var i=0; i<data.length; i++) {
       row = data[i];
       var tr = $("<tr></tr>");
@@ -337,41 +345,68 @@
         var cell = $("<td>" + cell_data + "</td>");
         tr.append(cell);
       }
-      console.log(tr.html());
       jqTbody.append(tr);
     }
   };
 
   function renderRemoteFoot(tablegrid, response) {
     data_reader = tablegrid.options.data_reader;
-    var page = response[data_reader.page];
+    var page = eval(response[data_reader.page]);
     var pageSize = tablegrid.options.page;
     var curentPageSize = response[data_reader.root].length;
-    var pageTotal = response[data_reader.pageTotal];
-    var total = response[data_reader.total];
+    var pageTotal = eval(response[data_reader.pageTotal]);
+    var total = eval(response[data_reader.total]);
 
-    var start_num = page == 1 ? 0 : pageSize*(page - 1);
+    var start_num = page == 1 ? 1 : pageSize*(page - 1) + 1;
+    var end_num = page == pageTotal ? total : pageSize*page;
     renderPagebar(tablegrid, page, pageTotal);
-    renderRecordbar(tablegrid, total, 1, 10);
+    renderRecordbar(tablegrid, total, start_num, end_num);
   }
 
   function renderPagebar(tablegrid, page, pageTotal) {
     var jqPagebar = pagebar(tablegrid);
     if (jqPagebar != false) {
-      var a3 = $("ul > li.disabled > a", jqPagebar);
-      a3.html( " " + page + " / " + pageTotal);
+      var lis = $("ul > li", jqPagebar);
+      $(lis.get(1)).children("a").attr("page", page-1);
+      $("a", lis.get(2)).html( " " + page + " / " + pageTotal);
+      $(lis.get(3)).children("a").attr("page", page+1);
+      $(lis.get(4)).children("a").attr("page", pageTotal);
+
+      if (1 == pageTotal) {
+        // $(lis.get(0)).addClass("disabled");
+        // $(lis.get(1)).addClass("disabled");
+        // $(lis.get(3)).addClass("disabled");
+        // $(lis.get(4)).addClass("disabled");
+      } else {
+        if (page == 1) {
+          // $(lis.get(0)).addClass("disabled");
+          // $(lis.get(1)).addClass("disabled");
+          $(lis.get(3)).removeClass("disabled");
+          $(lis.get(4)).removeClass("disabled");
+        } else if (page == pageTotal) {
+          $(lis.get(0)).removeClass("disabled");
+          $(lis.get(1)).removeClass("disabled");
+          // $(lis.get(3)).addClass("disabled");
+          // $(lis.get(4)).addClass("disabled");
+        } else {
+          $(lis.get(0)).removeClass("disabled");
+          $(lis.get(1)).removeClass("disabled");
+          $(lis.get(3)).removeClass("disabled");
+          $(lis.get(4)).removeClass("disabled");
+        }
+      }
     }
   };
 
-  function renderRecordbar(tablegrid, all, start, end) {
+  function renderRecordbar(tablegrid, all, start_num, end_num) {
     var jqRecordsbar = recordsbar(tablegrid);
     if (jqRecordsbar != false) {
-      jqRecordsbar.text( "1 ~ 222 共 1000 条");
+      jqRecordsbar.text( start_num + " ~ " + end_num + " 共 " + all + " 条");
     }
   };
 
   function log(msg) {
-    console.log(msg);
+    // console.log(msg);
   };
  /* tablegrid PLUGIN DEFINITION
   * =========================== */
