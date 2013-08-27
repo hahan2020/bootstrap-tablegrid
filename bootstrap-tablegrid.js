@@ -48,53 +48,64 @@
         , data_type : 'json'
         , data_url : ''
         , data_reader : {  root: "root", total: "total", page: "page", pageTotal: "pageTotal" }
-        , data_post : {}
         , chkallbox : false
+        , multiselect : false
         //分页相关
         , page : 0  //false/0:表示无分页； 10表示每页记录数
         , records : false    //显示记录总数信息
         , toolbar : false
-
-        // {
-        //       addButton:  {icon:"icon-plus",   title:"添加"}
-        //     , editButton: {icon:"icon-edit",   title:"修改"}
-        //     , delButton:  {icon:"icon-remove", title:"删除"}
-        //   }
-
         , autoLoad : false
+        //事件
+        , post : {}
+        , oncomplete : $.noop
       }
     , col_options : {
           bind : undefined
         , title : ""
         , hidden : false
+        , group : false
       }
-    , setPost : function(params, value) {
-        $.extend(true, this.options.data_post ,params);
-        return this;
-      }
-    , getPost : function(param){
-        if (param == undefined) {
-          return this.options.data_post;
-        } else {
-          return this.options.data_post[param];
-        }
-      }
-      //TODO:需添加本地js变量
-    , reloadData : function() {
+    , reloadData : function(post) {
         log("reloadData");
         var tablegrid = this;
+        if (typeof post === 'function') {
+          post = post.call(this);
+        }
+        if ($.isPlainObject(post)) {
+          post = $.extend(true, {}, post);          
+        } else {
+          post = {};
+        }
+        option_post = this.options.post;
+        if (typeof option_post === 'function') {
+          option_post = option_post.call(this);
+        }
+        if ($.isPlainObject(option_post)) {
+          option_post = $.extend(true, {}, option_post);          
+        } else {
+          option_post = {};
+        }
+        post = $.extend(true, {}, option_post, post);
+
         if (tablegrid.options.data_source == 'server') {
           $.ajax({
               url : tablegrid.options.data_url
             , type : "POST"
             , success : function (response, textStatus) {
                 response = eval(response);
-                renderRemoteBody(tablegrid, response);
-                renderRemoteFoot(tablegrid, response);
-                tablegrid.oncomplete();
+                data_reader = tablegrid.options.data_reader;
+
+                data = readJson(response, data_reader.root);
+                page = readJson(response, data_reader.page);
+                pageTotal = readJson(response, data_reader.pageTotal);
+                total = readJson(response, data_reader.total);
+
+                renderRemoteBody(tablegrid, data);
+                renderRemoteFoot(tablegrid, data, page, pageTotal, total);
+                tablegrid.options.oncomplete.call(tablegrid);
               }
             , dataType : tablegrid.options.data_type
-            , data : this.options.data_post
+            , data : post
             , error : function(XMLHttpRequest, textStatus, errorThrown) {
                 alert(textStatus);
               }
@@ -103,18 +114,12 @@
         return this;
       }
     , page : function(i) {
-        console.log("page:" + i);
-        this.options.data_post.page = i;
-        this.options.data_post.pageSize = this.options.page;
-        this.reloadData();
+        this.reloadData({page:i, pageSize: this.options.page});
       }
     , empty : function() {
         this.jqTable.children("tbody").children("tr").each(function(){
           $(this).remove();
         });
-        return this;
-      }
-    , oncomplete : function(){
         return this;
       }
   };
@@ -147,8 +152,10 @@
       }
     }
     options.chkallbox = eval(options.chkallbox);
+    options.multiselect = eval(options.multiselect);
     options.page = eval(options.page);
     options.records = eval(options.records);
+    TableGrid.prototype.options.debug = eval(options.debug);
 
     //保存
     tablegrid.options = $.extend(true, {}, TableGrid.prototype.options, options);
@@ -165,7 +172,7 @@
           col_options[key] = value;
         }
       }
-
+      col_options.group = eval(col_options.group);
       cols[i++] = $.extend(true, {}, TableGrid.prototype.col_options, col_options);
     });
     tablegrid.cols = cols;
@@ -177,7 +184,7 @@
     options = tablegrid.options;
     //处理checkbox
     if (options.chkallbox == true) {
-      chkall = $("<input type=checkbox>");
+      chkall = $("<input type=checkbox style='margin-top: -3px;'>");
       chkall.click(function() {
         var checked = $(this).attr("checked");
         tbody(tablegrid).children("tr").each(function(i, n) {
@@ -201,10 +208,12 @@
   };
 
   function caption(tablegrid) {
+    log("caption");
     return tablegrid.jqTable.children("caption");
   };
 
   function thead(tablegrid) {
+    log("thead");
     var jqTable = tablegrid.jqTable;
     var jqThead = jqTable.children("thead");
     if (jqThead.size() == 0) {
@@ -223,6 +232,7 @@
   };
 
   function tbody(tablegrid) {
+    log("tbody");
     var jqTable = tablegrid.jqTable;
     var jqTbody = jqTable.children("tbody");
     var jqThead = thead(tablegrid);
@@ -234,9 +244,13 @@
   };
 
   function tfoot(tablegrid) {
+    log("tfoot");
     var jqTable = tablegrid.jqTable;
     var jqTfoot = jqTable.children("tfoot");
     if (jqTfoot.size() != 0) {
+      jqThead = colspan = thead(tablegrid);
+      colspan = $("tr>th", jqTfoot).size();
+      $("tr>td", jqTfoot).attr("colspan", colspan);
       return jqTfoot;
     }
     var options = tablegrid.options;
@@ -307,6 +321,7 @@
   };
 
   function recordsbar(tablegrid) {
+    log("recordsbar");
     if (tablegrid.options.records ==false) {
       return false;
     }
@@ -321,7 +336,7 @@
     return jqRecordsbar;
   }
   
-  function renderRemoteBody(tablegrid, response) {
+  function renderRemoteBody(tablegrid, data) {
     log("renderRemoteBody");
     jqTable = tablegrid.jqTable;
     jqTbody = tbody(tablegrid);
@@ -329,34 +344,61 @@
       $(this).remove();
     });
 
-    data_reader = tablegrid.options.data_reader;
-    data = response[data_reader.root];
     for(var i=0; i<data.length; i++) {
       row = data[i];
       var tr = $("<tr></tr>");
+      tr.click(function(){
+        if (tablegrid.options.chkallbox == true) {
+          checkbox = $("td:first>input[type='checkbox']", this);
+          if (checkbox.attr("checked") === 'checked') {
+            checkbox.removeAttr("checked");
+          } else {
+            checkbox.attr("checked", true);
+            if (tablegrid.options.multiselect == false) {
+              $(this).prevAll().each(function(){
+                $("td:first>input[type='checkbox']", this).removeAttr("checked");
+              });
+              $(this).nextAll().each(function(){
+                $("td:first>input[type='checkbox']", this).removeAttr("checked");
+              });
+            }
+          }
+        }
+      });
       //checkbox
       if (tablegrid.options.chkallbox == true) {
-        tr.append("<td><input type=checkbox></td>");
+        tr.append("<td><input type=checkbox style='margin-top: -3px;'></td>");
       }
 
       for(var j=0; j<tablegrid.cols.length; j++) {
         col = tablegrid.cols[j];
         cell_data = row[col.bind];
         var cell = $("<td>" + cell_data + "</td>");
-        tr.append(cell);
+        if (i!=0) {
+          pre_cell_data = data[i-1][col.bind];
+        }
+        if (i==0 || col.group != true || pre_cell_data != cell_data) { //group
+            tr.append(cell); 
+            jqTable.data("rowspan_" + j, 1);
+        } else {
+            col_rowspan = jqTable.data("rowspan_" + j);
+            td_idx = j + 1;
+            if (tablegrid.options.chkallbox == true) {
+              td_idx++;
+            }
+            $("tr:nth-child(" + (i+1-col_rowspan) + ")>td:nth-child(" + td_idx +")", jqTbody)
+              .attr("rowspan", col_rowspan+1);
+            jqTable.data("rowspan_" + j, col_rowspan+1);
+        }
       }
       jqTbody.append(tr);
     }
   };
 
-  function renderRemoteFoot(tablegrid, response) {
-    data_reader = tablegrid.options.data_reader;
-    var page = eval(response[data_reader.page]);
+  function renderRemoteFoot(tablegrid, root, page, pageTotal, total) {
+    log("renderRemoteFoot");
     var pageSize = tablegrid.options.page;
-    var curentPageSize = response[data_reader.root].length;
-    var pageTotal = eval(response[data_reader.pageTotal]);
-    var total = eval(response[data_reader.total]);
-
+    var curentPageSize = root.length;
     var start_num = page == 1 ? 1 : pageSize*(page - 1) + 1;
     var end_num = page == pageTotal ? total : pageSize*page;
     renderPagebar(tablegrid, page, pageTotal);
@@ -364,6 +406,7 @@
   }
 
   function renderPagebar(tablegrid, page, pageTotal) {
+    log("renderPagebar");
     var jqPagebar = pagebar(tablegrid);
     if (jqPagebar != false) {
       var lis = $("ul > li", jqPagebar);
@@ -399,6 +442,7 @@
   };
 
   function renderRecordbar(tablegrid, all, start_num, end_num) {
+    log("renderRecordbar");
     var jqRecordsbar = recordsbar(tablegrid);
     if (jqRecordsbar != false) {
       jqRecordsbar.text( start_num + " ~ " + end_num + " 共 " + all + " 条");
@@ -406,7 +450,32 @@
   };
 
   function log(msg) {
-    // console.log(msg);
+    if (TableGrid.prototype.options.debug === true) {
+      console.log(msg);
+    }
+  };
+
+  function readJson(obj, expr) {
+    log("readJson");
+    var ret,p,prm = [], i;
+    if( typeof expr === 'function') { return expr(obj); }
+    ret = obj[expr];
+    if(ret===undefined) {
+      try {
+        if ( typeof expr === 'string' ) {
+          prm = expr.split('.');
+        }
+        i = prm.length;
+        if( i ) {
+          ret = obj;
+          while (ret && i--) {
+            p = prm.shift();
+            ret = ret[p];
+          }
+        }
+      } catch (e) {}
+    }
+    return ret;
   };
  /* tablegrid PLUGIN DEFINITION
   * =========================== */
